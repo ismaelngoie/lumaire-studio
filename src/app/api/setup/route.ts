@@ -1,19 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getRequestContext } from '@cloudflare/next-on-pages';
-import { D1Database } from '@cloudflare/workers-types';
 
 export const runtime = 'edge';
 
-// Fix: We added the index signature [key: string]: unknown
-// This tells TypeScript "This object has a DB, but it might have other things too."
-interface Env {
-  DB: D1Database;
-  [key: string]: unknown;
-}
-
 export async function GET() {
   try {
-    const { env } = getRequestContext<Env>();
+    // Now this works automatically because we fixed src/env.d.ts
+    const { env } = getRequestContext();
     
     const sql = `
       -- 1. Planners (The Users)
