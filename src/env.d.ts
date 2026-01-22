@@ -1,11 +1,9 @@
 import { D1Database } from "@cloudflare/workers-types";
 
 declare global {
-  namespace NodeJS {
-    interface ProcessEnv {
-      DB: D1Database;
-    }
+  // This is the specific interface next-on-pages looks for
+  interface CloudflareEnv {
+    DB: D1Database;
   }
 }
-
 export {};
