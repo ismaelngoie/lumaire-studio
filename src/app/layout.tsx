@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Inter, Pinyon_Script } from "next/font/google";
 import "./globals.css";
+import { Sidebar } from "@/components/Sidebar";
 
-// Font Configuration
 const playfair = Playfair_Display({ 
   subsets: ["latin"], 
   variable: "--font-playfair",
@@ -17,7 +17,7 @@ const inter = Inter({
 
 const pinyon = Pinyon_Script({
   weight: "400",
-  subsets: ["latin"],
+  subsets: ["latin"], 
   variable: "--font-pinyon",
   display: "swap",
 });
@@ -34,8 +34,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${playfair.variable} ${pinyon.variable} bg-lumaire-ivory text-lumaire-brown min-h-screen`}>
-        {children}
+      <body className={`${inter.variable} ${playfair.variable} ${pinyon.variable} bg-lumaire-ivory text-lumaire-brown min-h-screen flex`}>
+        {/* The Sidebar is fixed on the left */}
+        <Sidebar />
+        
+        {/* The Page Content - pushed 64 units (16rem) to the right to make room for sidebar */}
+        <div className="flex-1 ml-64">
+          {children}
+        </div>
       </body>
     </html>
   );
