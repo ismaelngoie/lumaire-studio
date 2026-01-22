@@ -7,19 +7,20 @@ export async function GET() {
   try {
     const { env } = getRequestContext();
 
-    // DEBUG CHECK: Is the database actually connected?
+    // Check connection
     if (!env || !env.DB) {
-      throw new Error("CRITICAL ERROR: The 'DB' binding is missing. The app cannot find the database.");
+      throw new Error("CRITICAL ERROR: The 'DB' binding is missing.");
     }
-    
-    const sql = `
-      CREATE TABLE IF NOT EXISTS planners (
+
+    // We split the SQL into separate statements to prevent the 'duration' crash
+    const statements = [
+      `CREATE TABLE IF NOT EXISTS planners (
           id TEXT PRIMARY KEY,
           email TEXT UNIQUE NOT NULL,
           full_name TEXT,
           created_at INTEGER DEFAULT (unixepoch())
-      );
-      CREATE TABLE IF NOT EXISTS clients (
+      )`,
+      `CREATE TABLE IF NOT EXISTS clients (
           id TEXT PRIMARY KEY,
           planner_id TEXT NOT NULL,
           partner_1_name TEXT NOT NULL,
@@ -29,8 +30,8 @@ export async function GET() {
           notes TEXT,
           created_at INTEGER DEFAULT (unixepoch()),
           FOREIGN KEY (planner_id) REFERENCES planners(id)
-      );
-      CREATE TABLE IF NOT EXISTS weddings (
+      )`,
+      `CREATE TABLE IF NOT EXISTS weddings (
           id TEXT PRIMARY KEY,
           client_id TEXT NOT NULL,
           wedding_date TEXT, 
@@ -38,8 +39,8 @@ export async function GET() {
           guest_count INTEGER,
           status TEXT DEFAULT 'planning', 
           FOREIGN KEY (client_id) REFERENCES clients(id)
-      );
-      CREATE TABLE IF NOT EXISTS tasks (
+      )`,
+      `CREATE TABLE IF NOT EXISTS tasks (
           id TEXT PRIMARY KEY,
           wedding_id TEXT NOT NULL,
           title TEXT NOT NULL,
@@ -48,8 +49,8 @@ export async function GET() {
           is_completed BOOLEAN DEFAULT 0,
           created_at INTEGER DEFAULT (unixepoch()),
           FOREIGN KEY (wedding_id) REFERENCES weddings(id)
-      );
-      CREATE TABLE IF NOT EXISTS timeline_events (
+      )`,
+      `CREATE TABLE IF NOT EXISTS timeline_events (
           id TEXT PRIMARY KEY,
           wedding_id TEXT NOT NULL,
           start_time TEXT NOT NULL,
@@ -57,8 +58,8 @@ export async function GET() {
           activity TEXT NOT NULL,
           notes TEXT,
           FOREIGN KEY (wedding_id) REFERENCES weddings(id)
-      );
-      CREATE TABLE IF NOT EXISTS vendors (
+      )`,
+      `CREATE TABLE IF NOT EXISTS vendors (
           id TEXT PRIMARY KEY,
           planner_id TEXT NOT NULL,
           business_name TEXT NOT NULL,
@@ -67,27 +68,28 @@ export async function GET() {
           email TEXT,
           phone TEXT,
           FOREIGN KEY (planner_id) REFERENCES planners(id)
-      );
-      CREATE TABLE IF NOT EXISTS wedding_vendors (
+      )`,
+      `CREATE TABLE IF NOT EXISTS wedding_vendors (
           id TEXT PRIMARY KEY,
           wedding_id TEXT NOT NULL,
           vendor_id TEXT NOT NULL,
           status TEXT DEFAULT 'proposed',
           FOREIGN KEY (wedding_id) REFERENCES weddings(id),
           FOREIGN KEY (vendor_id) REFERENCES vendors(id)
-      );
-      CREATE TABLE IF NOT EXISTS social_plans (
+      )`,
+      `CREATE TABLE IF NOT EXISTS social_plans (
           id TEXT PRIMARY KEY,
           wedding_id TEXT NOT NULL,
           platform TEXT,
           handle_hashtag TEXT,
           content_ideas TEXT,
           FOREIGN KEY (wedding_id) REFERENCES weddings(id)
-      );
-    `;
+      )`
+    ];
 
-    // Execute the SQL
-    await env.DB.exec(sql);
+    // Prepare and execute all statements at once
+    const batch = statements.map(stmt => env.DB.prepare(stmt));
+    await env.DB.batch(batch);
 
     return NextResponse.json({ 
       message: "✅ Database setup complete! All tables have been created successfully." 
@@ -95,7 +97,6 @@ export async function GET() {
 
   } catch (error: any) {
     console.error(error);
-    // This explicitly sends the error text back to you
     return NextResponse.json({ 
       error: "Failed to setup database", 
       message: error.message,
