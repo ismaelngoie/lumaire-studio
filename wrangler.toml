@@ -1,4 +1,4 @@
-name = "lumaire-studio"
+name = "lumairestudio"
 compatibility_date = "2024-02-08"
 compatibility_flags = ["nodejs_compat"]
 
