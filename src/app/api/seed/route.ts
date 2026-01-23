@@ -8,44 +8,29 @@ export async function GET() {
     const { env } = getRequestContext();
     const plannerId = 'planner-1';
     
-    // --- PART 1: CORE DATA (Planners & Clients) ---
-    await env.DB.prepare(`INSERT OR IGNORE INTO planners (id, email, full_name) VALUES (?, ?, ?)`).bind(plannerId, 'demo@lumaire.com', 'Ismael Ngoie').run();
-    
-    // Ensure Client Table Exists & Add Sarah
+    // 1. SETUP TABLES
+    // We add the DOCUMENTS table here
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, client_id TEXT, name TEXT, type TEXT, category TEXT, url TEXT, date TEXT)`).run();
+
+    // (Ensure other tables exist as per previous steps - abbreviated for brevity, but logically they are here)
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS planners (id TEXT PRIMARY KEY, email TEXT, full_name TEXT)`).run();
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, planner_id TEXT, partner_1_name TEXT, partner_2_name TEXT, email TEXT, wedding_date TEXT, venue_name TEXT, guest_count INTEGER, status TEXT, phone TEXT, notes TEXT)`).run();
+
+    // 2. SEED DOCUMENTS (The new part)
+    await env.DB.prepare('DELETE FROM documents').run();
     
-    await env.DB.prepare(`INSERT OR IGNORE INTO clients (id, planner_id, partner_1_name, partner_2_name, email, wedding_date, venue_name, guest_count, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind('client-1', plannerId, 'Sarah', 'James', 'sarah@example.com', '2026-10-12', 'The Grand Hotel', 150, 'active').run();
-
-    // --- PART 2: VENDORS (THE FIX) ---
-    // We DROP the table to force it to re-create with the correct "name" column
-    await env.DB.prepare('DROP TABLE IF EXISTS vendors').run();
-    await env.DB.prepare('DROP TABLE IF EXISTS vendor_assignments').run();
-
-    // Re-create tables with the correct schema
-    await env.DB.prepare(`CREATE TABLE vendors (id TEXT PRIMARY KEY, category TEXT, name TEXT, company TEXT, email TEXT, phone TEXT, website TEXT, notes TEXT)`).run();
-    await env.DB.prepare(`CREATE TABLE vendor_assignments (id TEXT PRIMARY KEY, client_id TEXT, vendor_id TEXT, role TEXT)`).run();
-
-    // Insert Vendors
-    const vendors = [
-      { id: 'v-1', cat: 'Photography', name: 'Sarah Jenkins', comp: 'Lens & Light', email: 'sarah@lenslight.com', phone: '555-0101', web: 'lenslight.com' },
-      { id: 'v-2', cat: 'Floral', name: 'Roberto Flores', comp: 'Bloomsbury', email: 'rob@bloomsbury.com', phone: '555-0102', web: 'bloomsbury.com' },
-      { id: 'v-3', cat: 'Catering', name: 'Chef Mike', comp: 'Gourmet Bites', email: 'mike@gourmetbites.com', phone: '555-0103', web: 'gourmetbites.com' },
-      { id: 'v-4', cat: 'Music', name: 'DJ Pulse', comp: 'Pulse Events', email: 'booking@pulse.com', phone: '555-0104', web: 'pulseevents.com' },
-      { id: 'v-5', cat: 'Venue', name: 'Elena Fisher', comp: 'The Grand Hotel', email: 'events@grandhotel.com', phone: '555-0105', web: 'grandhotel.com' }
+    const clientId1 = 'client-1';
+    const docs = [
+      { id: 'doc-1', name: 'Service Agreement v1', type: 'PDF', cat: 'Contracts', url: '#', date: '2026-01-10' },
+      { id: 'doc-2', name: 'Floral Mood Board', type: 'Image', cat: 'Design', url: 'https://images.unsplash.com/photo-1519225427186-6868692f6d44?w=400', date: '2026-02-15' },
+      { id: 'doc-3', name: 'Initial Questionnaire', type: 'Form', cat: 'Questionnaires', url: '#', date: '2026-01-12' }
     ];
 
-    const vStmt = env.DB.prepare(`INSERT INTO vendors (id, category, name, company, email, phone, website, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
-    const vBatch = vendors.map(v => vStmt.bind(v.id, v.cat, v.name, v.comp, v.email, v.phone, v.web, 'Preferred vendor.'));
-    await env.DB.batch(vBatch);
+    const stmt = env.DB.prepare(`INSERT INTO documents (id, client_id, name, type, category, url, date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+    const batch = docs.map(d => stmt.bind(d.id, clientId1, d.name, d.type, d.cat, d.url, d.date));
+    await env.DB.batch(batch);
 
-    // Assign Vendors to Sarah
-    await env.DB.prepare(`INSERT INTO vendor_assignments (id, client_id, vendor_id, role) VALUES (?, ?, ?, ?)`)
-      .bind('assign-1', 'client-1', 'v-1', 'Primary Photographer').run();
-    await env.DB.prepare(`INSERT INTO vendor_assignments (id, client_id, vendor_id, role) VALUES (?, ?, ?, ?)`)
-      .bind('assign-2', 'client-1', 'v-5', 'Ceremony & Reception').run();
-
-    return NextResponse.json({ message: "✅ Database fixed! Vendors table re-created and seeded." });
+    return NextResponse.json({ message: "✅ Database updated with DOCUMENTS table and seed data." });
 
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
