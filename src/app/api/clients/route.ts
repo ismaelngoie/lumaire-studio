@@ -3,7 +3,7 @@ import { getRequestContext } from '@cloudflare/next-on-pages';
 
 export const runtime = 'edge';
 
-// Define what we expect from the frontend
+// 1. Define the shape of the data we expect from the form
 interface ClientData {
   partner_1_name: string;
   partner_2_name: string;
@@ -17,7 +17,8 @@ interface ClientData {
 export async function POST(request: Request) {
   try {
     const { env } = getRequestContext();
-    // Explicitly tell TypeScript what this data looks like
+    
+    // 2. We use 'as ClientData' to tell TypeScript we trust this structure
     const data = (await request.json()) as ClientData;
 
     // Generate a simple ID
