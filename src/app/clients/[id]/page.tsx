@@ -7,7 +7,8 @@ import TimelineEditor from '@/components/clients/TimelineEditor';
 import TaskAdder from '@/components/clients/TaskAdder';
 import WorkflowPicker from '@/components/clients/WorkflowPicker';
 import VendorTeam from '@/components/clients/VendorTeam';
-import DocumentManager from '@/components/clients/DocumentManager'; // NEW
+import DocumentManager from '@/components/clients/DocumentManager';
+import SocialManager from '@/components/clients/SocialManager'; // NEW
 
 export const runtime = 'edge';
 
@@ -29,14 +30,15 @@ async function getClientData(id: string) {
   `).bind(id).all<any>();
   
   const { results: allVendors } = await env.DB.prepare(`SELECT * FROM vendors ORDER BY category ASC`).all<any>();
-
-  // NEW: Fetch Documents
   const { results: documents } = await env.DB.prepare(`SELECT * FROM documents WHERE client_id = ? ORDER BY date DESC`).bind(id).all<any>();
+  
+  // NEW: Fetch Social Data
+  const { results: social } = await env.DB.prepare(`SELECT * FROM social_tracker WHERE client_id = ?`).bind(id).all<any>();
 
   const totalContract = client.guest_count * 150; 
   const paidAmount = totalContract * 0.4; 
 
-  return { client, tasks, messages, timeline, templates, assignedVendors, allVendors, documents, financials: { totalContract, paidAmount } };
+  return { client, tasks, messages, timeline, templates, assignedVendors, allVendors, documents, social, financials: { totalContract, paidAmount } };
 }
 
 export default async function ClientProfile({ params }: { params: Promise<{ id: string }> }) {
@@ -44,7 +46,7 @@ export default async function ClientProfile({ params }: { params: Promise<{ id: 
   const data = await getClientData(id);
 
   if (!data) return <div className="p-12 text-center">Client not found.</div>;
-  const { client, tasks, messages, timeline, templates, assignedVendors, allVendors, documents, financials } = data;
+  const { client, tasks, messages, timeline, templates, assignedVendors, allVendors, documents, social, financials } = data;
 
   return (
     <main className="min-h-screen bg-lumaire-ivory p-8">
@@ -60,7 +62,6 @@ export default async function ClientProfile({ params }: { params: Promise<{ id: 
           </div>
         </div>
         <div className="flex gap-3">
-          {/* UPDATED LINK: Now scrolls to the document section */}
           <a href="#documents" className="px-4 py-2 bg-lumaire-brown text-white text-sm hover:bg-lumaire-wine transition-colors">Documents</a>
           <Link href="/vendors" className="px-4 py-2 border border-lumaire-brown/20 text-sm hover:bg-lumaire-brown hover:text-white transition-colors">Vendors</Link>
         </div>
@@ -90,13 +91,16 @@ export default async function ClientProfile({ params }: { params: Promise<{ id: 
           </Card>
 
           <VendorTeam clientId={client.id} assigned={assignedVendors} allVendors={allVendors} />
+          
+          {/* NEW: SOCIAL WIDGET */}
+          <Card title="Social Media">
+             <SocialManager clientId={client.id} data={social} />
+          </Card>
         </div>
 
         {/* RIGHT COLUMN */}
         <div className="lg:col-span-8 space-y-12">
            <TimelineEditor clientId={client.id} events={timeline} client={client} />
-           
-           {/* NEW: DOCUMENT VAULT (Placed here for high visibility) */}
            <DocumentManager clientId={client.id} documents={documents} />
         </div>
       </div>
