@@ -6,7 +6,11 @@ export default function TimelineEditor({ clientId, events }: { clientId: string,
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [newEvent, setNewEvent] = useState({ start_time: '', activity: '' });
+  
+  // Track which item is being edited
+  const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Add Event
   const addEvent = async () => {
     if (!newEvent.start_time || !newEvent.activity) return;
     setLoading(true);
@@ -19,21 +23,28 @@ export default function TimelineEditor({ clientId, events }: { clientId: string,
     router.refresh();
   };
 
+  // Delete Event
   const removeEvent = async (id: string) => {
+    if(!confirm("Remove this event?")) return;
     await fetch(`/api/timeline/${id}`, { method: 'DELETE' });
     router.refresh();
   };
 
+  // Save Edits (Time or Activity)
+  const updateEvent = async (id: string, field: 'start_time' | 'activity', value: string) => {
+    await fetch(`/api/timeline/${id}`, { 
+      method: 'PATCH', 
+      body: JSON.stringify({ [field]: value }) 
+    });
+    router.refresh();
+  };
+
   const loadTemplate = async () => {
-    if(!confirm("Load 'Classic Wedding' template? This will add 6 standard events.")) return;
+    if(!confirm("Load template?")) return;
     setLoading(true);
     await fetch('/api/timeline/template', { method: 'POST', body: JSON.stringify({ client_id: clientId }) });
     setLoading(false);
     router.refresh();
-  };
-
-  const openShareView = () => {
-    window.open(`/share/${clientId}`, '_blank');
   };
 
   return (
@@ -46,8 +57,8 @@ export default function TimelineEditor({ clientId, events }: { clientId: string,
                + Load Template
              </button>
           )}
-          <button onClick={openShareView} className="text-xs uppercase tracking-widest bg-lumaire-brown text-white px-3 py-1 hover:bg-lumaire-wine transition-colors">
-            Share / Preview
+          <button onClick={() => window.open(`/share/${clientId}`, '_blank')} className="text-xs uppercase tracking-widest bg-lumaire-brown text-white px-3 py-1 hover:bg-lumaire-wine transition-colors">
+            Share
           </button>
         </div>
       </div>
@@ -58,11 +69,30 @@ export default function TimelineEditor({ clientId, events }: { clientId: string,
           <div key={evt.id} className="relative group">
             <div className="absolute -left-[39px] top-1 w-5 h-5 rounded-full bg-lumaire-tan border-4 border-lumaire-ivory shadow-sm"></div>
             
-            <div className="bg-white p-6 border border-lumaire-tan/20 shadow-sm relative hover:border-lumaire-brown/30 transition-colors">
-              <button onClick={() => removeEvent(evt.id)} className="absolute top-4 right-4 text-[10px] text-red-400 opacity-0 group-hover:opacity-100 uppercase tracking-widest hover:text-red-600 transition-all">Remove</button>
-              <span className="block font-bold text-lumaire-brown mb-1">{evt.start_time}</span>
-              <span className="text-lg font-serif text-lumaire-brown/90">{evt.activity}</span>
-              {evt.notes && <p className="text-sm opacity-50 mt-1">{evt.notes}</p>}
+            <div className="bg-white p-6 border border-lumaire-tan/20 shadow-sm relative hover:border-lumaire-brown/30 transition-colors group">
+              
+              {/* EDITABLE TIME */}
+              <input 
+                type="time" 
+                defaultValue={evt.start_time}
+                onBlur={(e) => updateEvent(evt.id, 'start_time', e.target.value)}
+                className="block font-bold text-lumaire-brown mb-1 bg-transparent border-b border-transparent hover:border-lumaire-brown/20 focus:border-lumaire-brown outline-none transition-colors cursor-pointer"
+              />
+
+              {/* EDITABLE ACTIVITY */}
+              <input 
+                defaultValue={evt.activity}
+                onBlur={(e) => updateEvent(evt.id, 'activity', e.target.value)}
+                className="w-full text-lg font-serif text-lumaire-brown/90 bg-transparent border-b border-transparent hover:border-lumaire-brown/20 focus:border-lumaire-brown outline-none transition-colors"
+              />
+              
+              {/* REMOVE BUTTON */}
+              <button 
+                onClick={() => removeEvent(evt.id)}
+                className="absolute top-4 right-4 text-[10px] text-red-400 opacity-0 group-hover:opacity-100 uppercase tracking-widest hover:text-red-600 transition-all"
+              >
+                Remove
+              </button>
             </div>
           </div>
         ))}
