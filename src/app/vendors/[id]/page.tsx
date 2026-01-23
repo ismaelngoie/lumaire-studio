@@ -5,31 +5,49 @@ import { useRouter, useParams } from 'next/navigation';
 
 export const runtime = 'edge';
 
+// 1. Define the Shape of a Vendor
+interface Vendor {
+  id: string;
+  category: string;
+  name: string;
+  company: string;
+  email: string;
+  phone: string;
+  website: string;
+  notes: string;
+}
+
 export default function VendorProfile() {
   const router = useRouter();
   const params = useParams();
-  const [vendor, setVendor] = useState<any>(null);
+  
+  // 2. Type the state correctly
+  const [vendor, setVendor] = useState<Vendor | null>(null);
   const [loading, setLoading] = useState(true);
   
-  // Edit Mode State
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState<any>({});
+  const [formData, setFormData] = useState<Partial<Vendor>>({});
   const [notes, setNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
 
   useEffect(() => {
-    // Fetch Vendor Data
-    fetch(`/api/vendors/${params.id}`).then(res => res.json()).then(data => {
-      setVendor(data);
-      setFormData(data);
-      setNotes(data.notes || '');
-      setLoading(false);
-    });
+    if (!params.id) return;
+
+    fetch(`/api/vendors/${params.id}`)
+      .then(res => res.json())
+      .then((data: unknown) => { // 3. Cast the incoming data
+        const v = data as Vendor;
+        setVendor(v);
+        setFormData(v);
+        setNotes(v.notes || '');
+        setLoading(false);
+      })
+      .catch(err => console.error("Failed to load vendor", err));
   }, [params.id]);
 
   const handleSaveDetails = async () => {
     await fetch(`/api/vendors/${params.id}`, { method: 'PATCH', body: JSON.stringify(formData) });
-    setVendor(formData);
+    setVendor({ ...vendor, ...formData } as Vendor);
     setIsEditing(false);
     router.refresh();
   };
@@ -40,7 +58,7 @@ export default function VendorProfile() {
     setSavingNotes(false);
   };
 
-  if (loading) return <div className="p-12 text-center">Loading...</div>;
+  if (loading) return <div className="p-12 text-center opacity-50">Loading vendor details...</div>;
   if (!vendor) return <div className="p-12 text-center">Vendor not found.</div>;
 
   return (
@@ -73,10 +91,10 @@ export default function VendorProfile() {
             <div className="bg-white p-6 border border-lumaire-tan/20 space-y-4">
               {isEditing ? (
                 <>
-                  <input className="w-full p-2 border border-lumaire-tan/20" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Contact Name" />
-                  <input className="w-full p-2 border border-lumaire-tan/20" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="Email" />
-                  <input className="w-full p-2 border border-lumaire-tan/20" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="Phone" />
-                  <input className="w-full p-2 border border-lumaire-tan/20" value={formData.website} onChange={e => setFormData({...formData, website: e.target.value})} placeholder="Website" />
+                  <input className="w-full p-2 border border-lumaire-tan/20" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Contact Name" />
+                  <input className="w-full p-2 border border-lumaire-tan/20" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="Email" />
+                  <input className="w-full p-2 border border-lumaire-tan/20" value={formData.phone || ''} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="Phone" />
+                  <input className="w-full p-2 border border-lumaire-tan/20" value={formData.website || ''} onChange={e => setFormData({...formData, website: e.target.value})} placeholder="Website" />
                 </>
               ) : (
                 <>
@@ -97,7 +115,7 @@ export default function VendorProfile() {
             </div>
           </div>
 
-          {/* RIGHT: Communication Notes (The Missing Feature) */}
+          {/* RIGHT: Communication Notes */}
           <div className="space-y-6">
              <div className="flex justify-between items-center">
                 <h3 className="font-serif text-xl text-lumaire-brown">Vendor Notes & Log</h3>
@@ -109,7 +127,7 @@ export default function VendorProfile() {
                   placeholder="Log calls, pricing notes, or feedback here..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  onBlur={handleSaveNotes} // Auto-save on click away
+                  onBlur={handleSaveNotes}
                 />
                 <div className="pt-2 border-t border-lumaire-brown/5 text-[10px] opacity-40 uppercase tracking-widest text-right">
                   Private Internal Notes
