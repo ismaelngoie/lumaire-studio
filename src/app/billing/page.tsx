@@ -9,21 +9,38 @@ export default function BillingDashboard() {
   const [stats, setStats] = useState({ total: 0, pending: 0, paid: 0 });
 
   useEffect(() => {
-    fetch('/api/invoices').then(res => res.json()).then((data: any[]) => {
-      setInvoices(data);
-      // Calculate Stats
-      const total = data.reduce((sum, inv) => sum + inv.total_amount, 0);
-      const paid = data.filter(inv => inv.status === 'Paid').reduce((sum, inv) => sum + inv.total_amount, 0);
-      const pending = data.filter(inv => inv.status !== 'Paid').reduce((sum, inv) => sum + inv.total_amount, 0);
-      setStats({ total, paid, pending });
-    });
+    fetch('/api/invoices')
+      .then(res => res.json())
+      .then((data: any) => { // FIX: Explicitly cast 'data'
+        if (Array.isArray(data)) {
+           setInvoices(data);
+           
+           // Calculate Stats
+           const total = data.reduce((sum: number, inv: any) => sum + inv.total_amount, 0);
+           const paid = data.filter((inv: any) => inv.status === 'Paid').reduce((sum: number, inv: any) => sum + inv.total_amount, 0);
+           const pending = data.filter((inv: any) => inv.status !== 'Paid').reduce((sum: number, inv: any) => sum + inv.total_amount, 0);
+           
+           setStats({ total, paid, pending });
+        }
+      });
   }, []);
 
   const markPaid = async (id: string) => {
     if(!confirm("Mark this invoice as PAID?")) return;
     await fetch(`/api/invoices/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'Paid' }) });
+    
     // Optimistic Update
     setInvoices(invoices.map(i => i.id === id ? { ...i, status: 'Paid' } : i));
+    
+    // Update local stats immediately
+    const inv = invoices.find(i => i.id === id);
+    if(inv) {
+        setStats(prev => ({
+            ...prev,
+            paid: prev.paid + inv.total_amount,
+            pending: prev.pending - inv.total_amount
+        }));
+    }
   };
 
   return (
