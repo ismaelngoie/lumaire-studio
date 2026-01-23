@@ -5,29 +5,50 @@ import { getRequestContext } from '@cloudflare/next-on-pages';
 
 export const runtime = 'edge';
 
+// --- DEFINING TYPES FOR TYPESCRIPT ---
+interface CountResult {
+  count: number;
+}
+
+interface Task {
+  id: string;
+  title: string;
+  category: string;
+  due_date: string;
+  is_completed: number;
+}
+
+interface Wedding {
+  id: string;
+  partner_1_name: string;
+  partner_2_name: string;
+  wedding_date: string;
+  venue_name: string;
+}
+
 // FETCH DATA FROM DB
 async function getDashboardData() {
   const { env } = getRequestContext();
   
-  // 1. Get Active Weddings Count
+  // 1. Get Active Weddings Count (Typed as CountResult)
   const stats = await env.DB.prepare(`
     SELECT COUNT(*) as count FROM clients WHERE status = 'active'
-  `).first();
+  `).first<CountResult>();
 
-  // 2. Get Recent Tasks (Real data from DB)
+  // 2. Get Recent Tasks (Typed as Task[])
   const { results: tasks } = await env.DB.prepare(`
     SELECT * FROM tasks WHERE is_completed = 0 ORDER BY due_date ASC LIMIT 5
-  `).all();
+  `).all<Task>();
 
-  // 3. Get Upcoming Weddings (Real data from DB)
+  // 3. Get Upcoming Weddings (Typed as Wedding[])
   const { results: weddings } = await env.DB.prepare(`
     SELECT * FROM clients WHERE status = 'active' ORDER BY wedding_date ASC LIMIT 3
-  `).all();
+  `).all<Wedding>();
 
   return {
-    activeWeddings: stats?.count || 0,
-    tasks,
-    weddings
+    activeWeddings: stats?.count ?? 0, // Strict check to ensure it is a number
+    tasks: tasks || [],
+    weddings: weddings || []
   };
 }
 
@@ -44,7 +65,7 @@ export default async function Dashboard() {
         </div>
         <div className="flex gap-4">
           <Link 
-            href="/clients" // We will build the Create page next
+            href="/clients" 
             className="px-6 py-3 bg-lumaire-brown text-lumaire-ivory font-sans text-sm tracking-wide hover:bg-lumaire-wine transition-colors"
           >
             + New Client
@@ -56,6 +77,7 @@ export default async function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
         <Card>
           <p className="text-xs uppercase tracking-widest opacity-60 mb-2">Active Weddings</p>
+          {/* This is where the error was. Now it is strictly typed as a number. */}
           <p className="font-serif text-4xl">{data.activeWeddings}</p>
         </Card>
         <Card>
@@ -82,7 +104,7 @@ export default async function Dashboard() {
               <p className="text-sm opacity-50 italic">No pending tasks. Great job!</p>
             ) : (
               <div className="space-y-4">
-                {data.tasks.map((task: any) => (
+                {data.tasks.map((task) => (
                   <div key={task.id} className="flex items-center group cursor-pointer p-2 hover:bg-lumaire-tan/10 rounded-sm transition-colors">
                     <div className="w-5 h-5 border border-lumaire-brown rounded-full mr-4 flex items-center justify-center"></div>
                     <div>
@@ -103,7 +125,7 @@ export default async function Dashboard() {
         <div className="space-y-8">
           <Card title="Upcoming Weddings">
             <div className="space-y-6">
-              {data.weddings.map((wedding: any) => (
+              {data.weddings.map((wedding) => (
                 <div key={wedding.id} className="pb-4 border-b border-lumaire-brown/10 last:border-0 last:pb-0">
                   <h4 className="font-serif text-lg">{wedding.partner_1_name} & {wedding.partner_2_name}</h4>
                   <p className="text-sm text-lumaire-brown/60 mb-2">{wedding.wedding_date} • {wedding.venue_name}</p>
