@@ -3,43 +3,59 @@ import { getRequestContext } from '@cloudflare/next-on-pages';
 
 export const runtime = 'edge';
 
-async function getTimeline(id: string) {
-  const { env } = getRequestContext();
-  const client = await env.DB.prepare(`SELECT * FROM clients WHERE id = ?`).bind(id).first<any>();
-  const { results: timeline } = await env.DB.prepare(`SELECT * FROM timeline_events WHERE client_id = ? ORDER BY start_time ASC`).bind(id).all<any>();
-  return { client, timeline };
-}
-
 export default async function PublicTimeline({ params }: { params: Promise<{ id: string }> }) {
+  const { env } = getRequestContext();
   const { id } = await params;
-  const data = await getTimeline(id);
-  
-  if (!data.client) return <div className="p-12 text-center font-serif">Timeline not found.</div>;
+
+  // Fetch Client & Timeline Data
+  const client = await env.DB.prepare(`SELECT * FROM clients WHERE id = ?`).bind(id).first<any>();
+  const { results: events } = await env.DB.prepare(`SELECT * FROM timeline_events WHERE client_id = ? ORDER BY start_time ASC`).bind(id).all<any>();
+
+  if (!client) return (
+    <div className="min-h-screen flex items-center justify-center bg-lumaire-ivory text-lumaire-brown font-serif">
+        Timeline not found or expired.
+    </div>
+  );
 
   return (
-    <main className="min-h-screen bg-lumaire-ivory p-8 md:p-12 max-w-3xl mx-auto">
-      <div className="text-center mb-12">
-        <p className="text-xs uppercase tracking-[0.2em] text-lumaire-brown/60 mb-4">Official Timeline</p>
-        <h1 className="font-serif text-5xl text-lumaire-brown mb-4">{data.client.partner_1_name} & {data.client.partner_2_name}</h1>
-        <p className="text-lg text-lumaire-brown/80">{data.client.wedding_date} • {data.client.venue_name}</p>
-      </div>
+    <main className="min-h-screen bg-white text-lumaire-brown py-20 px-6 md:px-0">
+        {/* ELEGANT HEADER */}
+        <div className="text-center mb-24 space-y-6">
+            <p className="text-xs uppercase tracking-[0.3em] opacity-60">Official Wedding Timeline</p>
+            <h1 className="font-serif text-5xl md:text-8xl">{client.partner_1_name} & {client.partner_2_name}</h1>
+            <p className="font-serif text-xl md:text-2xl opacity-80">{client.wedding_date} • {client.venue_name}</p>
+        </div>
 
-      <div className="relative border-l border-lumaire-brown/20 ml-6 space-y-12 pl-8 py-2">
-        {data.timeline.map((evt: any) => (
-          <div key={evt.id} className="relative">
-             <div className="absolute -left-[37px] top-1 w-4 h-4 rounded-full bg-lumaire-brown border-4 border-lumaire-ivory"></div>
-             <div>
-               <span className="block font-sans font-bold text-lumaire-brown text-lg mb-1">{evt.start_time}</span>
-               <h3 className="font-serif text-2xl text-lumaire-brown mb-1">{evt.activity}</h3>
-               {evt.notes && <p className="text-lumaire-brown/60 italic font-serif">{evt.notes}</p>}
-             </div>
-          </div>
-        ))}
-      </div>
+        {/* TIMELINE VISUALIZATION */}
+        <div className="max-w-3xl mx-auto relative">
+            {/* The Vertical Line */}
+            <div className="absolute left-[80px] md:left-[120px] top-4 bottom-0 w-px bg-lumaire-brown/20"></div>
 
-      <footer className="mt-20 text-center border-t border-lumaire-brown/10 pt-8">
-        <p className="text-xs uppercase tracking-widest opacity-40">Planned with Lumaire Studio</p>
-      </footer>
+            <div className="space-y-16">
+                {events.map((evt: any) => (
+                    <div key={evt.id} className="relative flex items-baseline group">
+                        
+                        {/* Time (Left) */}
+                        <div className="w-[80px] md:w-[120px] text-right pr-8 md:pr-12 font-bold text-lg md:text-xl opacity-80">
+                            {evt.start_time}
+                        </div>
+                        
+                        {/* The Dot */}
+                        <div className="absolute left-[76px] md:left-[116px] top-2 w-[9px] h-[9px] bg-lumaire-brown rounded-full ring-4 ring-white"></div>
+
+                        {/* Content (Right) */}
+                        <div className="flex-1 pl-8 md:pl-12 pt-1">
+                            <h3 className="font-serif text-3xl md:text-4xl leading-tight">{evt.activity}</h3>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        {/* FOOTER */}
+        <div className="text-center mt-32 pt-12 border-t border-lumaire-brown/10 max-w-xl mx-auto">
+            <p className="text-[10px] uppercase tracking-widest opacity-40">Planned with Lumaire Studio</p>
+        </div>
     </main>
   );
 }
