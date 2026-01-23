@@ -6,44 +6,44 @@ export const runtime = 'edge';
 export async function GET() {
   try {
     const { env } = getRequestContext();
-    const plannerId = 'planner-1';
     
-    // 1. HARD RESET ALL TABLES (Safety first)
-    await env.DB.prepare('DROP TABLE IF EXISTS social_tracker').run();
-    await env.DB.prepare('DROP TABLE IF EXISTS documents').run(); 
-    // (Keeping previous resets commented out to save time, but ensuring social is clean)
+    // 1. HARD RESET ALL TABLES (To ensure clean state)
+    // We are adding email_queue, so we need to ensure it exists
+    await env.DB.prepare('DROP TABLE IF EXISTS email_queue').run();
 
-    // 2. CREATE SOCIAL TABLE
-    // type: 'handle', 'hashtag', 'idea'
-    // platform: 'Instagram', 'TikTok', etc.
-    // status: 'todo', 'posted' (only for ideas)
-    await env.DB.prepare(`CREATE TABLE social_tracker (id TEXT PRIMARY KEY, client_id TEXT, type TEXT, value TEXT, platform TEXT, status TEXT)`).run();
+    // 2. CREATE TABLES
+    // email_queue: Holds drafted automations waiting for approval
+    // status: 'pending', 'sent', 'dismissed'
+    await env.DB.prepare(`CREATE TABLE email_queue (id TEXT PRIMARY KEY, client_id TEXT, subject TEXT, body TEXT, type TEXT, due_date TEXT, status TEXT)`).run();
 
-    // (Ensure other tables exist - abbreviated)
-    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, client_id TEXT, name TEXT, type TEXT, category TEXT, url TEXT, date TEXT)`).run();
-    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS invoices (id TEXT PRIMARY KEY, client_id TEXT, number TEXT, status TEXT, due_date TEXT, items JSON, total_amount INTEGER, created_at TEXT)`).run();
+    // (Re-create other tables - keeping them consistent)
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS planners (id TEXT PRIMARY KEY, email TEXT, full_name TEXT)`).run();
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, planner_id TEXT, partner_1_name TEXT, partner_2_name TEXT, email TEXT, wedding_date TEXT, venue_name TEXT, guest_count INTEGER, status TEXT, phone TEXT, notes TEXT)`).run();
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS vendors (id TEXT PRIMARY KEY, category TEXT, name TEXT, company TEXT, email TEXT, phone TEXT, website TEXT, notes TEXT)`).run();
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS vendor_assignments (id TEXT PRIMARY KEY, client_id TEXT, vendor_id TEXT, role TEXT)`).run();
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, client_id TEXT, name TEXT, type TEXT, category TEXT, url TEXT, date TEXT)`).run();
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS invoices (id TEXT PRIMARY KEY, client_id TEXT, number TEXT, status TEXT, due_date TEXT, items JSON, total_amount INTEGER, created_at TEXT)`).run();
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS social_tracker (id TEXT PRIMARY KEY, client_id TEXT, type TEXT, value TEXT, platform TEXT, status TEXT)`).run();
 
-    // 3. SEED SOCIAL DATA
+    // 3. SEED DATA (Client)
     const clientId1 = 'client-1';
-    const socialItems = [
-      { id: 'soc-1', type: 'handle', value: '@sarah_bride', platform: 'Instagram', status: '' },
-      { id: 'soc-2', type: 'handle', value: '@james_groom', platform: 'TikTok', status: '' },
-      { id: 'soc-3', type: 'hashtag', value: '#SarahAndJames2026', platform: 'All', status: '' },
-      { id: 'soc-4', type: 'idea', value: 'Reel: Behind the scenes at flower market', platform: 'Instagram', status: 'todo' },
-      { id: 'soc-5', type: 'idea', value: 'TikTok: Cake testing reaction video', platform: 'TikTok', status: 'posted' }
-    ];
+    await env.DB.prepare(`INSERT OR IGNORE INTO clients (id, planner_id, partner_1_name, partner_2_name, email, wedding_date, venue_name, guest_count, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(clientId1, 'planner-1', 'Sarah', 'James', 'sarah@example.com', '2026-10-12', 'The Grand Hotel', 150, 'active').run();
 
-    const stmt = env.DB.prepare(`INSERT INTO social_tracker (id, client_id, type, value, platform, status) VALUES (?, ?, ?, ?, ?, ?)`);
-    await env.DB.batch(socialItems.map(s => stmt.bind(s.id, clientId1, s.type, s.value, s.platform, s.status)));
+    // 4. SEED A PENDING AUTOMATION (For Demo)
+    // Imagine a task is due soon, so we auto-generated a reminder
+    await env.DB.prepare(`INSERT INTO email_queue (id, client_id, subject, body, type, due_date, status) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .bind(
+        'queue-1', 
+        clientId1, 
+        'Reminder: Venue Payment Due', 
+        'Hi Sarah & James,\n\nJust a quick friendly reminder that your venue deposit is coming up on Oct 12th. Let me know if you need any help with the transfer!\n\nBest,\nIsmael', 
+        'reminder', 
+        '2026-01-24', 
+        'pending'
+      ).run();
 
-    // (Re-seed documents if needed from previous step)
-    // ... (Keeping it simple for this step)
-
-    return NextResponse.json({ message: "✅ Database updated with SOCIAL TRACKER." });
+    return NextResponse.json({ message: "✅ Database updated with EMAIL QUEUE." });
 
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
