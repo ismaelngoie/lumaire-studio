@@ -2,67 +2,40 @@ import React from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { getRequestContext } from '@cloudflare/next-on-pages';
+import TaskList from '@/components/dashboard/TaskList';
 
 export const runtime = 'edge';
 
-// --- TYPES (Strict Contracts for Data) ---
+// --- TYPES ---
 interface CountResult { count: number; }
+interface Task { id: string; title: string; category: string; due_date: string; is_completed: number; }
+interface Wedding { id: string; partner_1_name: string; partner_2_name: string; wedding_date: string; venue_name: string; }
+interface Message { id: string; type: 'email' | 'call' | 'text'; summary: string; date: string; partner_1_name: string; }
 
-interface Task { 
-  id: string; 
-  title: string; 
-  category: string; 
-  due_date: string; 
-  is_completed: number; 
-}
-
-interface Wedding { 
-  id: string; 
-  partner_1_name: string; 
-  partner_2_name: string; 
-  wedding_date: string; 
-  venue_name: string; 
-}
-
-interface Message {
-  id: string;
-  type: 'email' | 'call' | 'text';
-  summary: string;
-  date: string;
-  partner_1_name: string; // We join this from the clients table
-}
-
-// --- DATA FETCHING ENGINE ---
+// --- DATA FETCHING ---
 async function getDashboardData() {
   const { env } = getRequestContext();
   
-  // 1. High-Level View: Active Weddings Count
-  const stats = await env.DB.prepare(`
-    SELECT COUNT(*) as count FROM clients WHERE status = 'active'
-  `).first<CountResult>();
+  // 1. High-Level Stats
+  const stats = await env.DB.prepare("SELECT COUNT(*) as count FROM clients WHERE status = 'active'").first<CountResult>();
+  
+  // 2. Tasks (Fetch ALL tasks, so we can toggle them locally, filtered by 'not completed' generally or show last 5)
+  // We fetch only uncompleted ones for the "Today's Focus" list to keep it clean.
+  const { results: tasks } = await env.DB.prepare("SELECT * FROM tasks WHERE is_completed = 0 ORDER BY due_date ASC LIMIT 10").all<Task>();
 
-  // 2. Today's Tasks: Fetch pending items ordered by due date
-  const { results: tasks } = await env.DB.prepare(`
-    SELECT * FROM tasks WHERE is_completed = 0 ORDER BY due_date ASC LIMIT 5
-  `).all<Task>();
+  // 3. Upcoming Weddings
+  const { results: weddings } = await env.DB.prepare("SELECT * FROM clients WHERE status = 'active' ORDER BY wedding_date ASC LIMIT 3").all<Wedding>();
 
-  // 3. Upcoming Weddings: The next 3 events
-  const { results: weddings } = await env.DB.prepare(`
-    SELECT * FROM clients WHERE status = 'active' ORDER BY wedding_date ASC LIMIT 3
-  `).all<Wedding>();
-
-  // 4. Recent Messages: Fetch logs and join with Client Names so we know who it's from
+  // 4. Recent Messages
   const { results: messages } = await env.DB.prepare(`
     SELECT messages.id, messages.type, messages.summary, messages.date, clients.partner_1_name 
     FROM messages 
     LEFT JOIN clients ON messages.client_id = clients.id
     ORDER BY messages.date DESC 
-    LIMIT 4
+    LIMIT 5
   `).all<Message>();
 
-  // 5. Deadlines: Calculate the immediate next deadline
-  // In a real app, you might compare dates, but taking the first sorted task is a fast, accurate proxy.
-  const nextDeadline = tasks.length > 0 ? tasks[0].due_date : "No Deadlines";
+  const nextDeadline = tasks.length > 0 ? tasks[0].due_date : "None";
 
   return {
     activeWeddings: stats?.count ?? 0,
@@ -70,11 +43,11 @@ async function getDashboardData() {
     weddings: weddings || [],
     messages: messages || [],
     nextDeadline,
-    estimatedRevenue: (stats?.count ?? 0) * 4500 // Simple logic: $4.5k avg per active client
+    // "High Level Business View": Calculate revenue based on active clients
+    estimatedRevenue: (stats?.count ?? 0) * 4500 
   };
 }
 
-// --- THE UI COMPONENT ---
 export default async function Dashboard() {
   const data = await getDashboardData();
 
@@ -87,16 +60,11 @@ export default async function Dashboard() {
           <h1 className="text-4xl font-serif text-lumaire-brown">Good Morning, Ismael</h1>
         </div>
         <div className="flex gap-4">
-          <Link 
-            href="/add-client" 
-            className="px-6 py-3 bg-lumaire-brown text-lumaire-ivory font-sans text-sm tracking-wide hover:bg-lumaire-wine transition-colors"
-          >
-            + New Client
-          </Link>
+           <Link href="/add-client" className="px-6 py-3 bg-lumaire-brown text-lumaire-ivory font-sans text-sm tracking-wide hover:bg-lumaire-wine transition-colors">+ New Client</Link>
         </div>
       </header>
 
-      {/* 2. HIGH-LEVEL BUSINESS VIEW (Stats Row) */}
+      {/* 2. HIGH-LEVEL BUSINESS VIEW */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
         <Card>
           <p className="text-xs uppercase tracking-widest opacity-60 mb-2">Active Weddings</p>
@@ -108,54 +76,30 @@ export default async function Dashboard() {
         </Card>
         <Card>
           <p className="text-xs uppercase tracking-widest opacity-60 mb-2">Next Deadline</p>
-          {/* Formats YYYY-MM-DD to a readable "Oct 12" style if valid, else shows raw string */}
-          <p className="font-serif text-2xl truncate">
-             {data.nextDeadline}
-          </p> 
+          <p className="font-serif text-2xl truncate">{data.nextDeadline}</p> 
         </Card>
         <Card>
            <p className="text-xs uppercase tracking-widest opacity-60 mb-2">Est. Revenue</p>
-           <p className="font-serif text-4xl">
-             ${data.estimatedRevenue.toLocaleString()}
-           </p>
+           <p className="font-serif text-4xl">${data.estimatedRevenue.toLocaleString()}</p>
         </Card>
       </div>
 
-      {/* 3. MAIN GRID: TASKS, WEDDINGS, MESSAGES */}
+      {/* 3. MAIN GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
         
-        {/* Left Column: WORKFLOW (Tasks) */}
+        {/* Left Column: INTERACTIVE TASKS */}
         <div className="lg:col-span-2 space-y-8">
           <Card title="Today's Tasks">
-            {data.tasks.length === 0 ? (
-              <p className="text-sm opacity-50 italic py-4">No urgent tasks. You are all caught up.</p>
-            ) : (
-              <div className="space-y-1">
-                {data.tasks.map((task) => (
-                  <div key={task.id} className="flex items-center group cursor-pointer p-3 hover:bg-lumaire-tan/10 rounded-sm transition-colors border-b border-lumaire-brown/5 last:border-0">
-                    {/* Custom Checkbox UI */}
-                    <div className="w-5 h-5 border border-lumaire-brown rounded-full mr-4 flex-shrink-0 flex items-center justify-center hover:bg-lumaire-brown/10"></div>
-                    <div className="flex-1">
-                      <p className="font-medium text-lumaire-brown">{task.title}</p>
-                      <div className="flex gap-3 mt-1">
-                         <span className="text-xs opacity-50 uppercase tracking-wide">{task.category}</span>
-                         <span className="text-xs opacity-50">• Due {task.due_date}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="mt-4 pt-4 text-center">
-              <button className="text-xs font-bold uppercase tracking-widest hover:text-lumaire-wine transition-colors">View Workflow →</button>
+             {/* This is the new Interactive Component */}
+             <TaskList initialTasks={data.tasks} />
+            <div className="mt-4 pt-4 text-center border-t border-lumaire-brown/5">
+              <button className="text-xs font-bold uppercase tracking-widest hover:text-lumaire-wine transition-colors">View All Tasks →</button>
             </div>
           </Card>
         </div>
 
-        {/* Right Column: CONTEXT (Weddings & Messages) */}
+        {/* Right Column: MESSAGES & WEDDINGS */}
         <div className="space-y-8">
-          
-          {/* Upcoming Weddings Feed */}
           <Card title="Upcoming Weddings">
             <div className="space-y-6">
               {data.weddings.map((wedding) => (
@@ -168,15 +112,13 @@ export default async function Dashboard() {
             </div>
           </Card>
 
-          {/* NEW FEATURE: Recent Messages Log [cite: 48] */}
           <Card title="Recent Messages">
             <div className="space-y-4">
               {data.messages.length === 0 ? (
-                 <p className="text-sm opacity-50">No new messages logged.</p>
+                 <p className="text-sm opacity-50">No recent messages.</p>
               ) : (
                 data.messages.map((msg) => (
                   <div key={msg.id} className="flex gap-3 items-start">
-                    {/* Icon based on message type */}
                     <div className="mt-1 w-6 h-6 flex items-center justify-center bg-lumaire-tan/20 rounded-full text-xs text-lumaire-brown">
                       {msg.type === 'email' ? '✉️' : msg.type === 'call' ? '📞' : '💬'}
                     </div>
@@ -188,9 +130,6 @@ export default async function Dashboard() {
                   </div>
                 ))
               )}
-            </div>
-            <div className="mt-4 pt-4 border-t border-lumaire-brown/10">
-               <button className="text-xs opacity-60 hover:opacity-100 transition-opacity">+ Log Communication</button>
             </div>
           </Card>
 
