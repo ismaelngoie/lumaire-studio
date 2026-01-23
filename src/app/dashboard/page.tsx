@@ -11,17 +11,18 @@ interface CountResult { count: number; }
 interface Task { id: string; title: string; category: string; due_date: string; is_completed: number; }
 interface Wedding { id: string; partner_1_name: string; partner_2_name: string; wedding_date: string; venue_name: string; }
 interface Message { id: string; type: 'email' | 'call' | 'text'; summary: string; date: string; partner_1_name: string; }
+// New Activity Type
+interface Activity { id: string; text: string; date: string; type: 'new_client' | 'message'; }
 
 // --- DATA FETCHING ---
 async function getDashboardData() {
   const { env } = getRequestContext();
   
-  // 1. High-Level Stats
+  // 1. Stats
   const stats = await env.DB.prepare("SELECT COUNT(*) as count FROM clients WHERE status = 'active'").first<CountResult>();
   
-  // 2. Tasks (Fetch ALL tasks, so we can toggle them locally, filtered by 'not completed' generally or show last 5)
-  // We fetch only uncompleted ones for the "Today's Focus" list to keep it clean.
-  const { results: tasks } = await env.DB.prepare("SELECT * FROM tasks WHERE is_completed = 0 ORDER BY due_date ASC LIMIT 10").all<Task>();
+  // 2. Tasks
+  const { results: tasks } = await env.DB.prepare("SELECT * FROM tasks WHERE is_completed = 0 ORDER BY due_date ASC LIMIT 5").all<Task>();
 
   // 3. Upcoming Weddings
   const { results: weddings } = await env.DB.prepare("SELECT * FROM clients WHERE status = 'active' ORDER BY wedding_date ASC LIMIT 3").all<Wedding>();
@@ -32,19 +33,23 @@ async function getDashboardData() {
     FROM messages 
     LEFT JOIN clients ON messages.client_id = clients.id
     ORDER BY messages.date DESC 
-    LIMIT 5
+    LIMIT 4
   `).all<Message>();
 
-  const nextDeadline = tasks.length > 0 ? tasks[0].due_date : "None";
+  // 5. Recent Activity (Synthesized from Clients and Messages)
+  // We grab the last 3 created clients to mix into an "Activity Feed"
+  const { results: newClients } = await env.DB.prepare(`
+    SELECT id, partner_1_name, partner_2_name, created_at FROM clients ORDER BY created_at DESC LIMIT 3
+  `).all<any>();
 
   return {
     activeWeddings: stats?.count ?? 0,
     tasks: tasks || [],
     weddings: weddings || [],
     messages: messages || [],
-    nextDeadline,
-    // "High Level Business View": Calculate revenue based on active clients
-    estimatedRevenue: (stats?.count ?? 0) * 4500 
+    nextDeadline: tasks.length > 0 ? tasks[0].due_date : "None",
+    estimatedRevenue: (stats?.count ?? 0) * 4500,
+    newClients: newClients || []
   };
 }
 
@@ -53,7 +58,6 @@ export default async function Dashboard() {
 
   return (
     <main className="min-h-screen bg-lumaire-ivory p-8">
-      {/* 1. COMMAND CENTER HEADER */}
       <header className="flex justify-between items-end mb-12 border-b border-lumaire-brown/10 pb-6">
         <div>
           <p className="text-sm font-sans uppercase tracking-widest text-lumaire-brown/60 mb-2">Command Center</p>
@@ -64,75 +68,70 @@ export default async function Dashboard() {
         </div>
       </header>
 
-      {/* 2. HIGH-LEVEL BUSINESS VIEW */}
+      {/* STATS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-        <Card>
-          <p className="text-xs uppercase tracking-widest opacity-60 mb-2">Active Weddings</p>
-          <p className="font-serif text-4xl">{data.activeWeddings}</p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase tracking-widest opacity-60 mb-2">Pending Tasks</p>
-          <p className="font-serif text-4xl">{data.tasks.length}</p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase tracking-widest opacity-60 mb-2">Next Deadline</p>
-          <p className="font-serif text-2xl truncate">{data.nextDeadline}</p> 
-        </Card>
-        <Card>
-           <p className="text-xs uppercase tracking-widest opacity-60 mb-2">Est. Revenue</p>
-           <p className="font-serif text-4xl">${data.estimatedRevenue.toLocaleString()}</p>
-        </Card>
+        <Card><p className="text-xs uppercase opacity-60 mb-2">Active Weddings</p><p className="font-serif text-4xl">{data.activeWeddings}</p></Card>
+        <Card><p className="text-xs uppercase opacity-60 mb-2">Pending Tasks</p><p className="font-serif text-4xl">{data.tasks.length}</p></Card>
+        <Card><p className="text-xs uppercase opacity-60 mb-2">Next Deadline</p><p className="font-serif text-2xl truncate">{data.nextDeadline}</p></Card>
+        <Card><p className="text-xs uppercase opacity-60 mb-2">Est. Revenue</p><p className="font-serif text-4xl">${data.estimatedRevenue.toLocaleString()}</p></Card>
       </div>
 
-      {/* 3. MAIN GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
         
-        {/* Left Column: INTERACTIVE TASKS */}
+        {/* LEFT: TASKS */}
         <div className="lg:col-span-2 space-y-8">
           <Card title="Today's Tasks">
-             {/* This is the new Interactive Component */}
              <TaskList initialTasks={data.tasks} />
-            <div className="mt-4 pt-4 text-center border-t border-lumaire-brown/5">
-              <button className="text-xs font-bold uppercase tracking-widest hover:text-lumaire-wine transition-colors">View All Tasks →</button>
-            </div>
           </Card>
+          
+          {/* RECENT ACTIVITY BLOCK (RESTORED) */}
+          <div className="pt-8">
+             <h3 className="font-serif text-2xl text-lumaire-brown mb-4">Recent Activity</h3>
+             <div className="bg-white border border-lumaire-brown/10 p-6 space-y-6">
+                {/* Mix of New Clients and Messages */}
+                {data.newClients.map((c: any) => (
+                  <div key={c.id} className="flex gap-4 items-center">
+                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                    <p className="text-sm"><span className="font-bold">New Client:</span> {c.partner_1_name} & {c.partner_2_name} joined.</p>
+                  </div>
+                ))}
+                {data.messages.slice(0, 2).map((m) => (
+                   <div key={m.id} className="flex gap-4 items-center">
+                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                    <p className="text-sm"><span className="font-bold">Message:</span> {m.summary} ({m.partner_1_name})</p>
+                  </div>
+                ))}
+             </div>
+          </div>
         </div>
 
-        {/* Right Column: MESSAGES & WEDDINGS */}
+        {/* RIGHT: WEDDINGS & MESSAGES */}
         <div className="space-y-8">
           <Card title="Upcoming Weddings">
-            <div className="space-y-6">
-              {data.weddings.map((wedding) => (
-                <div key={wedding.id} className="pb-4 border-b border-lumaire-brown/10 last:border-0 last:pb-0">
-                  <h4 className="font-serif text-lg">{wedding.partner_1_name} & {wedding.partner_2_name}</h4>
-                  <p className="text-sm text-lumaire-brown/60 mb-2">{wedding.wedding_date} • {wedding.venue_name}</p>
+            <div className="space-y-4">
+              {data.weddings.map((w) => (
+                <div key={w.id} className="pb-3 border-b border-lumaire-brown/5 last:border-0">
+                  <h4 className="font-serif">{w.partner_1_name} & {w.partner_2_name}</h4>
+                  <p className="text-xs opacity-60">{w.wedding_date}</p>
                 </div>
               ))}
-              {data.weddings.length === 0 && <p className="text-sm opacity-50">No upcoming weddings.</p>}
             </div>
           </Card>
 
           <Card title="Recent Messages">
             <div className="space-y-4">
-              {data.messages.length === 0 ? (
-                 <p className="text-sm opacity-50">No recent messages.</p>
-              ) : (
-                data.messages.map((msg) => (
-                  <div key={msg.id} className="flex gap-3 items-start">
-                    <div className="mt-1 w-6 h-6 flex items-center justify-center bg-lumaire-tan/20 rounded-full text-xs text-lumaire-brown">
-                      {msg.type === 'email' ? '✉️' : msg.type === 'call' ? '📞' : '💬'}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">{msg.partner_1_name}</p>
-                      <p className="text-sm text-lumaire-brown/70 leading-relaxed">"{msg.summary}"</p>
-                      <p className="text-[10px] opacity-40 uppercase tracking-widest mt-1">{msg.date}</p>
-                    </div>
-                  </div>
-                ))
-              )}
+              {data.messages.map((msg) => (
+                <div key={msg.id} className="flex gap-3 items-start">
+                   <div className="mt-1 w-6 h-6 flex items-center justify-center bg-lumaire-tan/20 rounded-full text-xs">✉️</div>
+                   <div>
+                     <p className="text-sm font-medium">{msg.partner_1_name}</p>
+                     <p className="text-sm opacity-70">"{msg.summary}"</p>
+                     <p className="text-[10px] opacity-40 mt-1">{msg.date}</p>
+                   </div>
+                </div>
+              ))}
             </div>
           </Card>
-
         </div>
       </div>
     </main>
