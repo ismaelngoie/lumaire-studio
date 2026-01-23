@@ -11,18 +11,6 @@ import {
 
 /**
  * Lumaire Studio — “million-dollar” landing page
- * - Cinematic hero entrance + kinetic type
- * - Ambient spotlight cursor + paper grain + vignette + slow light sweep
- * - Signature flourish (SVG path draw)
- * - Magnetic CTA + underline-draw links
- * - System Status card with pulsing dot, 3D tilt, expandable “peek”, progress bar
- * - Scroll reveal sections, sticky manifesto column
- * - “Wow moment” screenshot stack parallax (placeholder cards)
- * - Elegant FAQ accordion
- * - Optional ultra-subtle sound toggle (off by default)
- *
- * Assumes Tailwind + your custom palette classes exist:
- * text-lumaire-wine, text-lumaire-brown, border-lumaire-tan, bg-lumaire-cream, etc.
  */
 
 const EASE_LUX = [0.16, 1, 0.3, 1] as const;
@@ -197,7 +185,7 @@ function MagneticButton({
   if (href) {
     return (
       <a
-        ref={(n) => (ref.current = n)}
+        ref={(n) => { ref.current = n; }} // FIX: Added brackets to avoid implicit return
         href={href}
         onMouseEnter={onHoverSound}
         onMouseMove={onMove}
@@ -215,7 +203,7 @@ function MagneticButton({
 
   return (
     <button
-      ref={(n) => (ref.current = n)}
+      ref={(n) => { ref.current = n; }} // FIX: Added brackets to avoid implicit return
       onClick={onClick}
       onMouseEnter={onHoverSound}
       onMouseMove={onMove}
@@ -328,7 +316,6 @@ function Accordion({
 }
 
 function SignatureFlourish() {
-  // A simple stroke-draw flourish under the logo
   const reduce = useReducedMotion();
   return (
     <motion.svg
@@ -924,7 +911,6 @@ export default function Home() {
                 onHoverSound={sound.playPaperTick}
                 onClick={() => {
                   sound.playPaperTick();
-                  // Replace with submit action
                   alert("Hook this button to your signup flow.");
                 }}
                 className="relative overflow-hidden"
@@ -973,7 +959,6 @@ export default function Home() {
             <button
               type="button"
               onClick={async () => {
-                // user gesture required for audio resume in many browsers
                 sound.setEnabled(!sound.enabled);
                 await sound.playPaperTick();
               }}
