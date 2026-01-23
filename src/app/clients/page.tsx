@@ -1,46 +1,64 @@
 import React from 'react';
 import Link from 'next/link';
-import { Card } from '@/components/ui/Card';
+import { getRequestContext } from '@cloudflare/next-on-pages';
 
-// Mock Data (Placeholder until we connect the DB)
-const clients = [
-  { id: '1', couple: 'Sarah & James', date: '2026-10-12', status: 'Active', venue: 'The Grand Hotel', email: 'sarah@example.com' },
-  { id: '2', couple: 'Elena & Michael', date: '2026-11-04', status: 'Onboarding', venue: 'Seaside Pavilion', email: 'elena@example.com' },
-  { id: '3', couple: 'David & Tom', date: '2026-12-15', status: 'Planning', venue: 'City Loft', email: 'david@example.com' },
-];
+export const runtime = 'edge';
 
-export default function ClientList() {
+interface Client {
+  id: string;
+  partner_1_name: string;
+  partner_2_name: string;
+  wedding_date: string;
+  venue_name: string;
+  status: string;
+}
+
+export default async function ClientList() {
+  const { env } = getRequestContext();
+  
+  // FETCH REAL CLIENTS FROM DB
+  const { results: clients } = await env.DB.prepare(`
+    SELECT * FROM clients ORDER BY wedding_date ASC
+  `).all<Client>();
+
   return (
     <main className="min-h-screen bg-lumaire-ivory p-8">
-      <header className="flex justify-between items-center mb-12">
-        <div>
-           <Link href="/dashboard" className="text-sm text-lumaire-brown/60 hover:text-lumaire-brown mb-2 block">← Back to Dashboard</Link>
-           <h1 className="text-4xl font-serif text-lumaire-brown">Clients</h1>
-        </div>
-        <button className="px-6 py-3 bg-lumaire-brown text-lumaire-ivory font-sans text-sm tracking-wide hover:bg-lumaire-wine transition-colors">
-          + Add Couple
-        </button>
+      <header className="flex justify-between items-end mb-12">
+        <h1 className="text-4xl font-serif text-lumaire-brown">Client List</h1>
+        <Link 
+          href="/clients/new" 
+          className="px-6 py-3 bg-lumaire-brown text-white font-sans text-sm tracking-wide hover:bg-lumaire-wine transition-colors"
+        >
+          + Add New Client
+        </Link>
       </header>
 
-      <div className="grid grid-cols-1 gap-6">
-        {clients.map((client) => (
-          <Link key={client.id} href={`/clients/${client.id}`}>
-            <Card className="hover:border-lumaire-tan transition-colors cursor-pointer group">
-              <div className="flex justify-between items-center">
+      <div className="grid grid-cols-1 gap-4">
+        {clients.length === 0 ? (
+           <div className="p-12 text-center border border-dashed border-lumaire-brown/20">
+             <p className="opacity-50">No clients yet. Add your first one!</p>
+           </div>
+        ) : (
+          clients.map((client) => (
+            <Link key={client.id} href={`/clients/${client.id}`} className="block group">
+              <div className="bg-white p-6 border border-lumaire-tan/20 flex justify-between items-center hover:border-lumaire-brown/50 transition-colors shadow-sm">
                 <div>
-                  <h3 className="font-serif text-2xl text-lumaire-brown group-hover:text-lumaire-wine transition-colors">{client.couple}</h3>
-                  <p className="text-lumaire-brown/60 mt-1">{client.venue} • {client.date}</p>
+                  <h3 className="font-serif text-xl group-hover:text-lumaire-wine transition-colors">
+                    {client.partner_1_name} & {client.partner_2_name}
+                  </h3>
+                  <p className="text-sm opacity-60 mt-1">
+                    {client.wedding_date} • {client.venue_name}
+                  </p>
                 </div>
-                <div className="text-right">
-                  <span className="inline-block px-3 py-1 bg-lumaire-tan/20 rounded-full text-xs uppercase tracking-widest text-lumaire-brown mb-2">
+                <div>
+                  <span className="px-3 py-1 bg-lumaire-ivory border border-lumaire-tan/20 text-xs uppercase tracking-widest">
                     {client.status}
                   </span>
-                  <p className="text-sm opacity-50">{client.email}</p>
                 </div>
               </div>
-            </Card>
-          </Link>
-        ))}
+            </Link>
+          ))
+        )}
       </div>
     </main>
   );
