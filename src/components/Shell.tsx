@@ -5,10 +5,13 @@ import { Sidebar } from "@/components/Sidebar";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isLanding = pathname === "/";
+  
+  // HIDE SIDEBAR IF:
+  // 1. It is the Landing Page ("/")
+  // 2. It is a Public Share Link (starts with "/share")
+  const isPublic = pathname === "/" || pathname?.startsWith("/share");
 
-  if (isLanding) {
-    // Billion Dollar Landing Page Mode (Full Screen, No Sidebar)
+  if (isPublic) {
     return <>{children}</>;
   }
 
@@ -16,7 +19,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-lumaire-ivory text-lumaire-brown">
       <Sidebar />
-      {/* Push content right by 16rem (64) to account for fixed sidebar */}
       <div className="flex-1 ml-64">
         {children}
       </div>
